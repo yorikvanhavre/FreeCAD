@@ -71,7 +71,7 @@ public:
     std::vector<LineSet> getFaceOverlay(int i = 0);
     std::vector<LineSet> getTrimmedLines(int i = 0);
     static std::vector<LineSet> getTrimmedLines(DrawViewPart* dvp, std::vector<LineSet> lineSets, int iface, double scale);
-
+    static std::vector<LineSet> getTrimmedLines(TopoDS_Face face, std::vector<LineSet> lineSets, double scale);
     static std::vector<TopoDS_Edge> makeEdgeOverlay(PATLineSpec hl, Bnd_Box bBox, double scale);
     static TopoDS_Edge makeLine(Base::Vector3d s, Base::Vector3d e);
     static std::vector<PATLineSpec> getDecodedSpecsFromFile(std::string fileSpec, std::string myPattern);

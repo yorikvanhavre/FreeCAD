@@ -229,8 +229,15 @@ std::vector<LineSet>  DrawGeomHatch::getTrimmedLines(int i)   //get the trimmed 
 }
 
 /* static */
-//! get hatch lines trimmed to face outline
 std::vector<LineSet> DrawGeomHatch::getTrimmedLines(DrawViewPart* source, std::vector<LineSet> lineSets, int iface, double scale )
+{
+    TopoDS_Face face = extractFace(source,iface);
+    return DrawGeomHatch::getTrimmedLines(face, lineSets, scale );
+}
+
+/* static */
+//! get hatch lines trimmed to face outline
+std::vector<LineSet> DrawGeomHatch::getTrimmedLines(TopoDS_Face face, std::vector<LineSet> lineSets, double scale )
 {
     std::vector<LineSet> result;
 
@@ -238,8 +245,6 @@ std::vector<LineSet> DrawGeomHatch::getTrimmedLines(DrawViewPart* source, std::v
         Base::Console().Log("DGH::getTrimmedLines - no LineSets!\n");
         return result;
     }
-
-    TopoDS_Face face = extractFace(source,iface);
 
     Bnd_Box bBox;
     BRepBndLib::Add(face, bBox);
@@ -549,7 +554,7 @@ void DrawGeomHatch::replacePatIncluded(std::string newPatFile)
     }
 }
 
-void DrawGeomHatch::onDocumentRestored() 
+void DrawGeomHatch::onDocumentRestored()
 {
 //    Base::Console().Message("DGH::onDocumentRestored()\n");
     if (PatIncluded.isEmpty()) {

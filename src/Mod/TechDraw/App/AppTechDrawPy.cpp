@@ -51,6 +51,7 @@
 #include <Mod/Part/App/TopoShape.h>
 #include <Mod/Part/App/TopoShapePy.h>
 #include <Mod/Part/App/TopoShapeEdgePy.h>
+#include <Mod/Part/App/TopoShapeFacePy.h>
 #include <Mod/Part/App/TopoShapeWirePy.h>
 #include <Mod/Part/App/OCCError.h>
 
@@ -62,6 +63,7 @@
 #include "DrawViewPartPy.h"
 #include "DrawViewAnnotation.h"
 #include "DrawViewDimension.h"
+#include "DrawGeomHatch.h"
 #include "DrawPage.h"
 #include "DrawPagePy.h"
 #include "Geometry.h"
@@ -71,6 +73,7 @@
 #include "DrawProjGroup.h"
 #include "DrawProjGroupItem.h"
 #include "DrawDimHelper.h"
+#include "HatchLine.h"
 
 namespace TechDraw {
 //module level static C++ functions go here
@@ -121,6 +124,9 @@ public:
         );
         add_varargs_method("makeDistanceDim3d",&Module::makeDistanceDim3d,
             "makeDistanceDim(DrawViewPart, dimType, 3dFromPoint, 3dToPoint) -- draw a Length dimension between fromPoint to toPoint.  FromPoint and toPoint are unscaled 3d model points. dimType is one of ['Distance', 'DistanceX', 'DistanceY'."
+        );
+        add_varargs_method("makeGeomHatch",&Module::makeGeomHatch,
+            "makeGeomHatch(face, patternName, patternScale, [patternFilePath]) -- returns a list of edges representing a hatch pattern built from the given file, pattern name an pattern scale, that fills the given face. Will currently only work reliably if the face is flat and lies on the XY plane. If the pattern file is omitted, the internal TechDraw pattern definitions file is used."
         );
 
         initialize("This is a module for making drawings"); // register with Python
@@ -878,6 +884,77 @@ private:
 
         return Py::None();
     }
+
+// makeGeomHatch(face, patternName, patternScale, [patternFilePath])
+
+    Py::Object makeGeomHatch(const Py::Tuple& args)
+    {
+        PyObject* pFace;
+        PyObject* pPatName;
+        float patScale;
+        PyObject* pPatFile;
+        std::string patName;
+        std::string patFile;
+
+        if (!PyArg_ParseTuple(args.ptr(), "OOf|O", &pFace, &pPatName, &patScale, &pPatFile)) {
+            throw Py::TypeError("expected (face, patternName, patternScale, [patternFilePath])");
+        }
+        if (!PyObject_TypeCheck(pFace, &(Part::TopoShapeFacePy::Type))) {
+            throw Py::TypeError("the given shape is not a face");
+        }
+#if PY_MAJOR_VERSION >= 3
+        if (PyUnicode_Check(pPatName)) {
+            patName = PyUnicode_AsUTF8(pPatName);
+        }
+        if (PyUnicode_Check(pPatFile)) {
+            patFile = PyUnicode_AsUTF8(pPatFile);
+        }
+#else
+        if (PyString_Check(pPatName)) {
+            patName = PyString_AsString(pPatName);
+        }
+        if (PyString_Check(pPatFile)) {
+            patFile = PyString_AsString(pPatFile);
+        }
+#endif
+        if (patFile.empty()) {
+            Base::Reference<ParameterGrp> hGrp = App::GetApplication().GetUserParameter()
+                .GetGroup("BaseApp")->GetGroup("Preferences")->GetGroup("Mod/TechDraw/PAT");
+            std::string defaultDir = App::Application::getResourceDir() + "Mod/TechDraw/PAT/";
+            std::string defaultFileName = defaultDir + "FCPAT.pat";
+            std::string patternFileName = hGrp->GetASCII("FilePattern",defaultFileName.c_str());
+            if (patternFileName.empty()) {
+                patternFileName = defaultFileName;
+            }
+            patFile = patternFileName;
+        }
+        Base::FileInfo tfi(patFile);
+        if (!tfi.isReadable()) {
+            throw Py::TypeError("PAT file not Found");
+        }
+
+
+        std::vector<PATLineSpec> specs = DrawGeomHatch::getDecodedSpecsFromFile(patFile,patName);
+        std::vector<LineSet> m_lineSets;
+        for (auto& hl: specs) {
+            LineSet ls;
+            ls.setPATLineSpec(hl);
+            m_lineSets.push_back(ls);
+        }
+        std::vector<LineSet> result;
+        const TopoDS_Shape& sh = static_cast<TopoShapePy*>(pFace)->
+            getTopoShapePtr()->getShape();
+        const TopoDS_Face face = TopoDS::Face(sh);
+        result = DrawGeomHatch::getTrimmedLines(face,m_lineSets,patScale);
+        PyObject* pResult = PyList_New(0);
+        for (auto& ls: result) {
+            for (auto& e: ls.getEdges()) {
+                PyList_Append(pResult,new TopoShapeEdgePy(new TopoShape(e)));
+            }
+        }
+        return Py::asObject(pResult);
+    }
+
  };
 
  PyObject* initModule()
