@@ -1346,7 +1346,7 @@ class Snapper:
 
 
     def getPoint(self, last=None, callback=None, movecallback=None,
-                 extradlg=None, title=None, mode="point"):
+                 extradlg=None, title=None, mode="point", holds=[]):
         """Get a 3D point from the screen.
 
         getPoint([last],[callback],[movecallback],[extradlg],[title]):
@@ -1379,7 +1379,7 @@ class Snapper:
         """
         self.pt = None
         self.lastSnappedObject = None
-        self.holdPoints = []
+        self.holdPoints = holds
         self.ui = Gui.draftToolBar
         self.view = Draft.get3DView()
 

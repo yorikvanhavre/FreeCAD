@@ -346,12 +346,14 @@ class _CommandWall:
             # interactive mode
 
             self.points = []
+            self.holds = self.getHoldPoints()
             import WorkingPlane
             self.wp = WorkingPlane.get_working_plane()
             self.tracker = DraftTrackers.boxTracker()
             FreeCADGui.Snapper.getPoint(callback=self.getPoint,
                                         extradlg=self.taskbox(),
-                                        title=translate("Arch","First point of wall")+":")
+                                        title=translate("Arch","First point of wall")+":",
+                                        holds = self.holds)
 
     def getPoint(self,point=None,obj=None):
         """Callback for clicks during interactive mode.
@@ -383,7 +385,8 @@ class _CommandWall:
                                         callback=self.getPoint,
                                         movecallback=self.update,
                                         extradlg=self.taskbox(),
-                                        title=translate("Arch","Next point")+":",mode="line")
+                                        title=translate("Arch","Next point")+":",mode="line",
+                                        holds = self.holds)
 
         elif len(self.points) == 2:
             import Part
@@ -631,6 +634,17 @@ class _CommandWall:
         FreeCAD.ActiveDocument.recompute()
         if hasattr(FreeCADGui,"draftToolBar"):
             FreeCADGui.draftToolBar.escape()
+
+    def getHoldPoints(self):
+        """Returns a list of points from other visible walls"""
+
+        points = []
+        for o in FreeCAD.ActiveDocument.Objects:
+            if Draft.getType(o) == "Wall":
+                bsh = getattr(o.Base, "Shape", None)
+                if bsh:
+                    points.extend([v.Point for v in bsh.Vertexes])
+        return points
 
 
 class _CommandMergeWalls:
