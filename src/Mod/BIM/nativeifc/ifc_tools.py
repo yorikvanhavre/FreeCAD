@@ -253,7 +253,7 @@ def create_object(ifcentity, document, ifcfile, shapemode=0, objecttype=None):
     if exobj:
         return exobj
     s = "IFC: Created #{}: {}, '{}'\n".format(
-        ifcentity.id(), ifcentity.is_a(), ifcentity.Name
+        ifcentity.id(), ifcentity.is_a(), getattr(ifcentity, "Name", "")
     )
     objecttype = ifc_export.get_object_type(ifcentity, objecttype)
     FreeCAD.Console.PrintLog(s)
@@ -492,6 +492,7 @@ def add_object(document, otype=None, oname="IfcObject"):
     'text',
     'dimension',
     'sectionplane',
+    'axis',
     or anything else for a standard IFC object"""
 
     if not document:
@@ -499,6 +500,15 @@ def add_object(document, otype=None, oname="IfcObject"):
     if otype == "sectionplane":
         obj = Arch.makeSectionPlane()
         obj.Proxy = ifc_objects.ifc_object(otype)
+    elif otype == "axis":
+        obj = Arch.makeAxis()
+        obj.Proxy = ifc_objects.ifc_object(otype)
+        obj.removeProperty("Angles")
+        obj.removeProperty("Distances")
+        obj.removeProperty("Labels")
+        obj.removeProperty("Limit")
+        if obj.ViewObject:
+            obj.ViewObject.DisplayMode = "Flat Lines"
     elif otype == "dimension":
         obj = Draft.make_dimension(FreeCAD.Vector(), FreeCAD.Vector(1,0,0))
         obj.Proxy = ifc_objects.ifc_object(otype)
@@ -662,7 +672,18 @@ def add_properties(
             if value is not None:
                 setattr(obj, attr, str(value))
     # annotation properties
-    if ifcentity.is_a("IfcAnnotation"):
+    if ifcentity.is_a("IfcGridAxis"):
+        axisdata = ifc_export.get_axis(ifcentity)
+        if axisdata:
+            if "Placement" not in obj.PropertiesList:
+                obj.addProperty("App::PropertyPlacement", "Placement", "Base")
+            if "CustomText" in obj.PropertiesList:
+                obj.setPropertyStatus("CustomText", "Hidden")
+                obj.setExpression("CustomText", "AxisTag")
+            if "Length" not in obj.PropertiesList:
+                obj.addProperty("App::PropertyLength","Length","Axis")
+            obj.Length = axisdata[1]
+    elif ifcentity.is_a("IfcAnnotation"):
         sectionplane = ifc_export.get_sectionplane(ifcentity)
         if sectionplane:
             if "Placement" not in obj.PropertiesList:
@@ -1011,6 +1032,13 @@ def set_placement(obj):
     if obj.Class in ["IfcProject", "IfcProjectLibrary"]:
         return
     element = get_ifc_element(obj)
+    if not hasattr(element, "ObjectPlacement"):
+        # special case: this is a grid axis, it has no placement
+        if element.is_a("IfcGridAxis"):
+            return set_axis_points(obj, element, ifcfile)
+        # other cases of objects without ObjectPlacement?
+        print("DEBUG: object without ObjectPlacement",element)
+        return False
     placement = FreeCAD.Placement(obj.Placement)
     placement.Base = FreeCAD.Vector(placement.Base).multiply(get_scale(ifcfile))
     new_matrix = get_ios_matrix(placement)
@@ -1033,6 +1061,29 @@ def set_placement(obj):
         api = "geometry.edit_object_placement"
         api_run(api, ifcfile, product=element, matrix=new_matrix, is_si=False)
         return True
+    return False
+
+
+def set_axis_points(obj, element, ifcfile):
+    """Sets the points of an axis from placement and length"""
+
+    if element.AxisCurve.is_a("IfcPolyline"):
+        p1 = obj.Placement.Base
+        p2 = obj.Placement.multVec(FreeCAD.Vector(0, obj.Length.Value, 0))
+        api_run(
+            "attribute.edit_attributes",
+            ifcfile,
+            product=element.AxisCurve.Points[0],
+            attributes={"Coordinates": tuple(p1)},
+        )
+        api_run(
+            "attribute.edit_attributes",
+            ifcfile,
+            product=element.AxisCurve.Points[-1],
+            attributes={"Coordinates": tuple(p2)},
+        )
+        return True
+    print("DEBUG: unhandled axis type:",element.AxisCurve.is_a())
     return False
 
 
@@ -1192,6 +1243,7 @@ def create_relationship(old_obj, obj, parent, element, ifcfile):
     """Creates a relationship between an IFC object and a parent IFC object"""
 
     parent_element = get_ifc_element(parent)
+    uprel = None
     # case 4: anything inside group
     if parent_element.is_a("IfcGroup"):
         # special case: adding a section plane to a grouo turns it into a drawing
@@ -1320,7 +1372,7 @@ def create_relationship(old_obj, obj, parent, element, ifcfile):
                     relating_object=container,
                 )
     # case 3: element aggregated inside other element
-    else:
+    elif element.is_a("IfcProduct"):
         try:
             api_run("aggregate.unassign_object", ifcfile, products=[element])
         except:
