@@ -25,7 +25,7 @@
 import FreeCAD
 
 # the property groups below should not be treated as psets
-NON_PSETS = ["Base", "IFC", "", "Geometry", "Dimension", "Linear/radial dimension", "SectionPlane", "Axis"]
+NON_PSETS = ["Base", "IFC", "", "Geometry", "Dimension", "Linear/radial dimension", "SectionPlane", "Axis", "BuildingPart", "IFC Attributes"]
 
 class ifc_object:
     """Base class for all IFC-based objects"""

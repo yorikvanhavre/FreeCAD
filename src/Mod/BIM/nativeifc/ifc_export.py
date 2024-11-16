@@ -121,6 +121,11 @@ def get_export_preferences(ifcfile, preferred_context=None, create=None):
                         best_context = ifc_tools.api_run("context.add_context",
                                                          ifcfile,
                                                          context_type = preferred_context[0])
+    if not best_context:
+        if contexts:
+            best_context = contexts[0]
+        else:
+            print("DEBUG: ifc_export: Could not find a valid context")
     return prefs, best_context
 
 
@@ -181,6 +186,8 @@ def get_object_type(ifcentity, objecttype=None):
                 objecttype = "text"
         elif ifcentity.is_a("IfcGridAxis"):
             objecttype = "axis"
+        elif ifcentity.is_a() in ["IfcBuilding", "IfcBuildingStorey"]:
+            objecttype = "buildingpart"
     return objecttype
 
 
